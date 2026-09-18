@@ -1,146 +1,812 @@
-/**
- * GST200 Fire Alarm Telecode & Translation System
- * Web App Backend (Code.gs)
- */
-
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('GST200 Fire Alarm Code Generator / 火灾报警代码生成器')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-
-function processHanziInput(input) {
-  try {
-    if (!input || !input.trim()) {
-      return { error: "Input kosong / 输入为空" };
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GST200 Fire Alarm Code Generator / 火灾报警控制器 字符与电报码转换器</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap">
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #090d16 100%);
+      --card-bg: rgba(255, 255, 255, 0.96);
+      --primary: #0f172a;          /* Deep Industrial Slate */
+      --accent-fire: #dc2626;     /* Fire Safety Red */
+      --accent-electric: #0284c7; /* Electric Blue Accent */
+      --electric-yellow: #d97706; /* Industrial Caution Gold */
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #cbd5e1;
+      --border-focus: #0284c7;
+      --highlight-bg: #f8fafc;
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(2, 132, 199, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(220, 38, 38, 0.12) 0px, transparent 50%),
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 24px 24px, 24px 24px;
+      color: var(--text-main);
+      margin: 0;
+      padding: 20px 12px;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 850px;
+      background: var(--card-bg);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      box-shadow: 
+        0 20px 40px -15px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(2, 132, 199, 0.2);
+      padding: 20px 22px;
+      backdrop-filter: blur(10px);
+    }
+
+    /* Header Layout */
+    .header {
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .header-image-container {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .header-image-container img {
+      width: 58px;
+      height: 58px;
+      border-radius: 10px;
+      object-fit: cover;
+      border: 2px solid #0284c7;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+    }
+
+    .header-text-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .header-title-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 2px;
+    }
+
+    .badge {
+      background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+    }
+
+    .badge-digital {
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      box-shadow: 0 2px 4px rgba(2, 132, 199, 0.3);
+    }
+
+    .header h1 {
+      margin: 0;
+      color: var(--primary);
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+    }
+
+    .header .subtitle-zh {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      color: #475569;
+      margin-top: 1px;
+    }
+
+    .header p {
+      margin: 4px 0 0 0;
+      color: var(--text-muted);
+      font-size: 11.5px;
+      line-height: 1.3;
+      font-weight: 500;
+    }
+
+    .input-group {
+      margin-bottom: 14px;
+    }
+
+    /* Textarea Ditinggikan & Rata Tengah untuk Input/Placeholder */
+    textarea {
+      width: 100%;
+      height: 68px; /* Tinggi disesuaikan 2 baris */
+      min-height: 64px;
+      max-height: 110px;
+      padding: 10px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--primary);
+      background-color: #f8fafc;
+      transition: all 0.25s ease;
+      resize: vertical;
+      text-align: center; /* Rata tengah */
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
+    }
+
+    textarea::placeholder {
+      color: #94a3b8;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.45;
+      text-align: center;
+    }
+
+    textarea:focus {
+      outline: none;
+      background-color: #ffffff;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.15), inset 0 2px 4px rgba(0,0,0,0.02);
+    }
+
+    /* Quick Examples Chips */
+    .example-container {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .example-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .example-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      background: #f1f5f9;
+      color: var(--primary);
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .chip:hover {
+      background-color: #e2e8f0;
+      border-color: #0284c7;
+      color: #0284c7;
+      transform: translateY(-1px);
+    }
+
+    .chip:active {
+      transform: scale(0.97);
+    }
+
+    /* Button Tombol Aksi Utama (2 Baris Teks) */
+    button.btn-generate {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #ffffff;
+      border: 1px solid #334155;
+      padding: 10px 16px;
+      font-size: 13.5px;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 6px;
+      letter-spacing: 0.3px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      line-height: 1.25;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button.btn-generate .btn-zh {
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    button.btn-generate:hover {
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.35);
+      transform: translateY(-1px);
+    }
+
+    button.btn-generate:active {
+      transform: scale(0.99);
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      margin: 14px 0;
+      font-size: 12.5px;
+      color: var(--accent-electric);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .result-section {
+      display: none;
+      margin-top: 18px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    /* Card Hasil Ringkasan */
+    .summary-card {
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 12px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 2px;
+      width: 100%;
+    }
+
+    .summary-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 800;
+      letter-spacing: 0.6px;
+    }
+
+    .summary-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1.3;
+      word-break: break-word;
+      text-align: center;
+    }
+
+    .hanzi-display {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1.2;
+    }
+
+    .pinyin-display {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--accent-electric);
+    }
+
+    /* Telecode Box Frame Industri */
+    .telecode-box-wrapper {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+      padding: 4px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .telecode-box {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 21px;
+      font-weight: 800;
+      color: #dc2626;
+      background: #fef2f2;
+      padding: 8px 16px;
+      border: 1.5px solid #fca5a5;
+      border-radius: 8px;
+      display: inline-block;
+      white-space: nowrap;
+      word-break: keep-all;
+      letter-spacing: -0.5px;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1);
+    }
+
+    /* Tabel Responsif Rincian */
+    .table-container {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background-color: #ffffff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12.5px;
+      min-width: 420px;
+    }
+
+    th {
+      background-color: #f1f5f9;
+      color: var(--primary);
+      font-weight: 700;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.6px;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      color: var(--text-main);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+
+    .td-hanzi {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .td-telecode {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      color: var(--accent-fire);
+      white-space: nowrap;
+    }
+
+    .not-found {
+      color: var(--accent-fire);
+      font-style: italic;
+    }
+
+    /* Custom Modal Popup Peringatan */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(6px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      border: 1px solid #fee2e2;
+    }
+
+    .modal-icon-bg {
+      width: 52px;
+      height: 52px;
+      background-color: #fef2f2;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px auto;
+      border: 1px solid #fecaca;
+    }
+
+    .modal-icon {
+      font-size: 24px;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #991b1b;
+      margin-bottom: 10px;
+      line-height: 1.3;
+    }
+
+    .modal-body {
+      font-size: 13px;
+      color: #475569;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .modal-body-id {
+      margin-bottom: 8px;
+    }
+
+    .modal-body-zh {
+      font-size: 12.5px;
+      color: #64748b;
+      border-top: 1px dashed #e2e8f0;
+      padding-top: 8px;
+    }
+
+    .modal-body strong {
+      color: #dc2626;
+      font-weight: 700;
+    }
+
+    .modal-btn {
+      background-color: #991b1b;
+      color: #ffffff;
+      border: none;
+      padding: 11px 20px;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      transition: background-color 0.2s ease;
+    }
+
+    .modal-btn:hover {
+      background-color: #7f1d1d;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Responsive HP & Tablet */
+    @media (max-width: 576px) {
+      body {
+        padding: 8px 6px;
+      }
+
+      .container {
+        padding: 14px 12px;
+        border-radius: 12px;
+      }
+
+      .header {
+        gap: 10px;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+      }
+
+      .header-image-container img {
+        width: 48px;
+        height: 48px;
+      }
+
+      .header h1 {
+        font-size: 14.5px;
+      }
+
+      .header .subtitle-zh {
+        font-size: 12.5px;
+      }
+
+      .header p {
+        font-size: 10.5px;
+      }
+
+      textarea {
+        font-size: 14px;
+        height: 64px;
+      }
+
+      button.btn-generate {
+        font-size: 13px;
+        padding: 9px 12px;
+      }
+
+      button.btn-generate .btn-zh {
+        font-size: 11.5px;
+      }
+
+      .summary-card {
+        padding: 12px 8px;
+        gap: 10px;
+      }
+
+      .telecode-box {
+        font-size: 17px;
+        padding: 6px 10px;
+        letter-spacing: -0.5px;
+      }
+
+      .hanzi-display {
+        font-size: 18px;
+      }
+
+      .summary-value {
+        font-size: 14px;
+      }
+
+      th, td {
+        padding: 8px 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="header-image-container">
+      <img src="https://lh3.googleusercontent.com/d/1stFu0Rm9d4GvB7eQr0CEjSsHYYol-Wiw" alt="FACP GST200 Panel">
+    </div>
+
+    <div class="header-text-container">
+      <div class="header-title-container">
+        <span class="badge">FACP GST200</span>
+        <span class="badge-digital">Digitalization</span>
+      </div>
+      <h1>
+        Fire Alarm Code Generator
+        <span class="subtitle-zh">火灾报警代码生成器</span>
+      </h1>
+      <p>Generator Kode Telecode & Terjemahan Lokasi / 火灾报警控制器 字符与电报码转换器</p>
+    </div>
+  </div>
+
+  <!-- Area Input dengan Placeholder Bilingual Rata Tengah 2 Baris -->
+  <div class="input-group">
+    <textarea id="hanziInput" placeholder="Ketik Hanzi Di Sini&#10;在此输入汉字"></textarea>
     
-    // 1. Ambil ketiga sheet dari Spreadsheet
-    var sheetKarakter = ss.getSheetByName("DB-Karakter");
-    var sheetPerangkat = ss.getSheetByName("DB-Perangkat");
-    var sheetASCII = ss.getSheetByName("Kode ASCII");
+    <!-- Contoh Kalimat Hanzi Interaktif -->
+    <div class="example-container">
+      <span class="example-label">Contoh Input / 示例点击:</span>
+      <div class="example-chips">
+        <span class="chip" onclick="setInput('电气主任办公室')">电气主任办公室</span>
+        <span class="chip" onclick="setInput('电气电缆夹层')">电气电缆夹层</span>
+        <span class="chip" onclick="setInput('脱硫配电室')">脱硫配电室</span>
+      </div>
+    </div>
+  </div>
 
-    // Container Lookup Map untuk menyimpan seluruh gabungan data dari 3 sheet
-    var lookupMap = {};
+  <!-- Tombol Aksi Utama Rapi 2 Baris -->
+  <button class="btn-generate" onclick="generateCode()">
+    <span>GENERATE KODE & TERJEMAHAN</span>
+    <span class="btn-zh">生成代码与翻译</span>
+  </button>
 
-    // -------------------------------------------------------------
-    // A. BACA DATA DARI SHEET 1: "DB-Karakter"
-    // (Baris 1: Header, Col A: Karakter, Col B: Pinyin, Col C: Telecode, Col D: Terjemahan)
-    // -------------------------------------------------------------
-    if (sheetKarakter) {
-      var dataKarakter = sheetKarakter.getDataRange().getValues();
-      for (var i = 1; i < dataKarakter.length; i++) {
-        var charK = String(dataKarakter[i][0]).trim();
-        if (charK) {
-          lookupMap[charK] = {
-            pinyin: String(dataKarakter[i][1] || "").trim(),
-            telecode: String(dataKarakter[i][2] || "").trim(),
-            terjemahan: String(dataKarakter[i][3] || "").trim()
-          };
-        }
-      }
-    }
+  <div id="loading" class="loading">⚡ Memproses data dari Spreadsheet... / 正在处理来自表格的数据...</div>
 
-    // -------------------------------------------------------------
-    // B. BACA DATA DARI SHEET 2: "DB-Perangkat"
-    // (Baris 1: Header, Col A: Karakter, Col B: Pinyin, Col C: Telecode, Col D: Terjemahan)
-    // -------------------------------------------------------------
-    if (sheetPerangkat) {
-      var dataPerangkat = sheetPerangkat.getDataRange().getValues();
-      for (var j = 1; j < dataPerangkat.length; j++) {
-        var charP = String(dataPerangkat[j][0]).trim();
-        if (charP && !lookupMap[charP]) {
-          lookupMap[charP] = {
-            pinyin: String(dataPerangkat[j][1] || "").trim(),
-            telecode: String(dataPerangkat[j][2] || "").trim(),
-            terjemahan: String(dataPerangkat[j][3] || "").trim()
-          };
-        }
-      }
-    }
+  <div id="resultSection" class="result-section">
+    <div class="section-title">Hasil Ringkasan / 结果汇总</div>
+    <div class="summary-card">
+      
+      <!-- 1. Atas: Teks Hanzi & Pinyin -->
+      <div class="summary-item">
+        <span class="summary-label">Teks Hanzi & Pinyin / 汉字与拼音</span>
+        <div id="resHanzi" class="hanzi-display">-</div>
+        <div id="resPinyin" class="pinyin-display">-</div>
+      </div>
 
-    // -------------------------------------------------------------
-    // C. BACA DATA DARI SHEET 3: "Kode ASCII"
-    // (Baris 1: Judul, Baris 2: Header "Karakter" & "Kode", Data mulai Baris 3 / Indeks 2)
-    // Col A: Karakter (seperti angka "1", "2", huruf, dll), Col B: Kode ASCII
-    // -------------------------------------------------------------
-    if (sheetASCII) {
-      var dataASCII = sheetASCII.getDataRange().getValues();
-      // Mulai perulangan dari baris ke-3 (indeks 2) untuk melewati Judul & Header
-      for (var k = 2; k < dataASCII.length; k++) {
-        var charA = String(dataASCII[k][0]).trim();
-        var codeA = String(dataASCII[k][1] || "").trim();
+      <!-- 2. Tengah: Kode Telecode (Selalu 1 Baris Penuh) -->
+      <div class="summary-item">
+        <span class="summary-label">Kode Telecode (Format FACP) / 电报码 (控制器格式)</span>
+        <div class="telecode-box-wrapper">
+          <span id="resTelecode" class="telecode-box">-</span>
+        </div>
+      </div>
 
-        if (charA && !lookupMap[charA]) {
-          lookupMap[charA] = {
-            pinyin: charA,        // Pinyin disamakan dengan karakter itu sendiri
-            telecode: codeA,      // Kode ASCII dari Kolom B
-            terjemahan: charA     // Terjemahan disamakan dengan karakter itu sendiri
-          };
-        }
-      }
-    }
+      <!-- 3. Bawah: Terjemahan Bahasa Indonesia -->
+      <div class="summary-item">
+        <span class="summary-label">Terjemahan Lokasi (Bahasa Indonesia) / 印尼语位置翻译</span>
+        <div id="resTerjemahan" class="summary-value" style="font-size: 15px; color: var(--primary);">-</div>
+      </div>
 
-    // -------------------------------------------------------------
-    // D. PENCOCOKAN TEKS INPUT PER KARAKTER
-    // -------------------------------------------------------------
-    var chars = input.trim().split("");
-    var details = [];
-    var telecodeList = [];
-    var combinedPinyin = [];
-    var combinedTerjemahan = [];
+    </div>
 
-    for (var m = 0; m < chars.length; m++) {
-      var c = chars[m];
+    <div class="section-title" style="text-align: left;">Rincian Per Karakter / 各字符详细信息</div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Hanzi / 汉字</th>
+            <th>Pinyin / 拼音</th>
+            <th>Telecode / 电报码</th>
+            <th>Terjemahan / 翻译</th>
+          </tr>
+        </thead>
+        <tbody id="detailTableBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
-      if (lookupMap[c]) {
-        var item = lookupMap[c];
-        var codeVal = item.telecode;
+<!-- Modal Peringatan Custom Bilingual -->
+<div id="alertModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-icon-bg">
+      <span class="modal-icon">⚠️</span>
+    </div>
+    <div class="modal-title">Batas Maksimal Terlampaui<br><span style="font-size:14px; font-weight:600; color:#b91c1c;">超出最大字符限制</span></div>
+    <div id="modalMessage" class="modal-body"></div>
+    <button class="modal-btn" onclick="closeModal()">Saya Mengerti / 我知道了</button>
+  </div>
+</div>
 
-        // Auto-pad 4 digit jika berupa angka telecode pendek (contoh: 1 -> 0001)
-        if (codeVal.length > 0 && codeVal.length < 4 && !isNaN(codeVal)) {
-          codeVal = ("0000" + codeVal).slice(-4);
-        }
-
-        details.push({
-          char: c,
-          pinyin: item.pinyin,
-          telecode: codeVal,
-          terjemahan: item.terjemahan,
-          found: true
-        });
-
-        telecodeList.push(codeVal);
-        if (item.pinyin) combinedPinyin.push(item.pinyin);
-        if (item.terjemahan) combinedTerjemahan.push(item.terjemahan);
-
-      } else {
-        // Karakter tidak ditemukan di ketiga sheet
-        details.push({
-          char: c,
-          pinyin: "-",
-          telecode: "????",
-          terjemahan: "[Tidak ditemukan / 未找到]",
-          found: false
-        });
-        telecodeList.push("????");
-        combinedPinyin.push("-");
-        combinedTerjemahan.push("[?] ");
-      }
-    }
-
-    return {
-      inputHanzi: input,
-      combinedTelecode: telecodeList.join("-"),
-      combinedPinyin: combinedPinyin.join("-"),
-      combinedTerjemahan: combinedTerjemahan.join("-"),
-      details: details
-    };
-
-  } catch (e) {
-    return { error: "Terjadi Kesalahan / 发生错误: " + e.message };
+<script>
+  function setInput(text) {
+    document.getElementById('hanziInput').value = text;
   }
-}
+
+  function showWarningModal(charCount) {
+    var modalMsg = document.getElementById('modalMessage');
+    var textID = '<div class="modal-body-id">Panel FACP GST200 hanya mendukung maksimal <strong>7 karakter</strong>.<br>Input Anda saat ini terdiri dari <strong>' + charCount + ' karakter</strong>.<br>Silakan kurangi teks Anda.</div>';
+    var textZH = '<div class="modal-body-zh">GST200 控制器最多仅支持 <strong>7 个字符</strong>。<br>您当前输入的字符数为 <strong>' + charCount + ' 个字符</strong>。<br>请减少您输入的字符。</div>';
+    
+    modalMsg.innerHTML = textID + textZH;
+    document.getElementById('alertModal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('alertModal').style.display = 'none';
+  }
+
+  function generateCode() {
+    var rawInput = document.getElementById('hanziInput').value;
+    var trimmedInput = rawInput.trim();
+
+    if (!trimmedInput) {
+      alert('Silakan masukkan karakter terlebih dahulu! / 请输入字符！');
+      return;
+    }
+
+    var charArray = Array.from(trimmedInput);
+    if (charArray.length > 7) {
+      showWarningModal(charArray.length);
+      return;
+    }
+
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('resultSection').style.display = 'none';
+
+    google.script.run
+      .withSuccessHandler(renderResults)
+      .withFailureHandler(handleError)
+      .processHanziInput(trimmedInput);
+  }
+
+  function renderResults(data) {
+    document.getElementById('loading').style.display = 'none';
+    
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+
+    document.getElementById('resHanzi').innerText = data.inputHanzi || document.getElementById('hanziInput').value;
+    document.getElementById('resPinyin').innerText = data.combinedPinyin ? '(' + data.combinedPinyin + ')' : '-';
+    document.getElementById('resTelecode').innerText = data.combinedTelecode || '-';
+    document.getElementById('resTerjemahan').innerText = data.combinedTerjemahan || '-';
+
+    var tbody = document.getElementById('detailTableBody');
+    tbody.innerHTML = '';
+
+    data.details.forEach(function(item) {
+      var tr = document.createElement('tr');
+      
+      var tdChar = document.createElement('td');
+      tdChar.className = 'td-hanzi';
+      tdChar.innerText = item.char;
+      
+      var tdPinyin = document.createElement('td');
+      tdPinyin.innerText = item.pinyin;
+
+      var tdTelecode = document.createElement('td');
+      tdTelecode.className = 'td-telecode';
+      tdTelecode.innerText = item.telecode;
+
+      var tdTerjemahan = document.createElement('td');
+      tdTerjemahan.innerText = item.terjemahan;
+
+      if (!item.found) {
+        tdTerjemahan.className = 'not-found';
+      }
+
+      tr.appendChild(tdChar);
+      tr.appendChild(tdPinyin);
+      tr.appendChild(tdTelecode);
+      tr.appendChild(tdTerjemahan);
+
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('resultSection').style.display = 'block';
+  }
+
+  function handleError(err) {
+    document.getElementById('loading').style.display = 'none';
+    alert('Terjadi kesalahan / 发生错误: ' + err.message);
+  }
+</script>
+
+</body>
+</html>
