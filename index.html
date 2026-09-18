@@ -1,0 +1,146 @@
+/**
+ * GST200 Fire Alarm Telecode & Translation System
+ * Web App Backend (Code.gs)
+ */
+
+function doGet() {
+  return HtmlService.createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle('GST200 Fire Alarm Code Generator / 火灾报警代码生成器')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function processHanziInput(input) {
+  try {
+    if (!input || !input.trim()) {
+      return { error: "Input kosong / 输入为空" };
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 1. Ambil ketiga sheet dari Spreadsheet
+    var sheetKarakter = ss.getSheetByName("DB-Karakter");
+    var sheetPerangkat = ss.getSheetByName("DB-Perangkat");
+    var sheetASCII = ss.getSheetByName("Kode ASCII");
+
+    // Container Lookup Map untuk menyimpan seluruh gabungan data dari 3 sheet
+    var lookupMap = {};
+
+    // -------------------------------------------------------------
+    // A. BACA DATA DARI SHEET 1: "DB-Karakter"
+    // (Baris 1: Header, Col A: Karakter, Col B: Pinyin, Col C: Telecode, Col D: Terjemahan)
+    // -------------------------------------------------------------
+    if (sheetKarakter) {
+      var dataKarakter = sheetKarakter.getDataRange().getValues();
+      for (var i = 1; i < dataKarakter.length; i++) {
+        var charK = String(dataKarakter[i][0]).trim();
+        if (charK) {
+          lookupMap[charK] = {
+            pinyin: String(dataKarakter[i][1] || "").trim(),
+            telecode: String(dataKarakter[i][2] || "").trim(),
+            terjemahan: String(dataKarakter[i][3] || "").trim()
+          };
+        }
+      }
+    }
+
+    // -------------------------------------------------------------
+    // B. BACA DATA DARI SHEET 2: "DB-Perangkat"
+    // (Baris 1: Header, Col A: Karakter, Col B: Pinyin, Col C: Telecode, Col D: Terjemahan)
+    // -------------------------------------------------------------
+    if (sheetPerangkat) {
+      var dataPerangkat = sheetPerangkat.getDataRange().getValues();
+      for (var j = 1; j < dataPerangkat.length; j++) {
+        var charP = String(dataPerangkat[j][0]).trim();
+        if (charP && !lookupMap[charP]) {
+          lookupMap[charP] = {
+            pinyin: String(dataPerangkat[j][1] || "").trim(),
+            telecode: String(dataPerangkat[j][2] || "").trim(),
+            terjemahan: String(dataPerangkat[j][3] || "").trim()
+          };
+        }
+      }
+    }
+
+    // -------------------------------------------------------------
+    // C. BACA DATA DARI SHEET 3: "Kode ASCII"
+    // (Baris 1: Judul, Baris 2: Header "Karakter" & "Kode", Data mulai Baris 3 / Indeks 2)
+    // Col A: Karakter (seperti angka "1", "2", huruf, dll), Col B: Kode ASCII
+    // -------------------------------------------------------------
+    if (sheetASCII) {
+      var dataASCII = sheetASCII.getDataRange().getValues();
+      // Mulai perulangan dari baris ke-3 (indeks 2) untuk melewati Judul & Header
+      for (var k = 2; k < dataASCII.length; k++) {
+        var charA = String(dataASCII[k][0]).trim();
+        var codeA = String(dataASCII[k][1] || "").trim();
+
+        if (charA && !lookupMap[charA]) {
+          lookupMap[charA] = {
+            pinyin: charA,        // Pinyin disamakan dengan karakter itu sendiri
+            telecode: codeA,      // Kode ASCII dari Kolom B
+            terjemahan: charA     // Terjemahan disamakan dengan karakter itu sendiri
+          };
+        }
+      }
+    }
+
+    // -------------------------------------------------------------
+    // D. PENCOCOKAN TEKS INPUT PER KARAKTER
+    // -------------------------------------------------------------
+    var chars = input.trim().split("");
+    var details = [];
+    var telecodeList = [];
+    var combinedPinyin = [];
+    var combinedTerjemahan = [];
+
+    for (var m = 0; m < chars.length; m++) {
+      var c = chars[m];
+
+      if (lookupMap[c]) {
+        var item = lookupMap[c];
+        var codeVal = item.telecode;
+
+        // Auto-pad 4 digit jika berupa angka telecode pendek (contoh: 1 -> 0001)
+        if (codeVal.length > 0 && codeVal.length < 4 && !isNaN(codeVal)) {
+          codeVal = ("0000" + codeVal).slice(-4);
+        }
+
+        details.push({
+          char: c,
+          pinyin: item.pinyin,
+          telecode: codeVal,
+          terjemahan: item.terjemahan,
+          found: true
+        });
+
+        telecodeList.push(codeVal);
+        if (item.pinyin) combinedPinyin.push(item.pinyin);
+        if (item.terjemahan) combinedTerjemahan.push(item.terjemahan);
+
+      } else {
+        // Karakter tidak ditemukan di ketiga sheet
+        details.push({
+          char: c,
+          pinyin: "-",
+          telecode: "????",
+          terjemahan: "[Tidak ditemukan / 未找到]",
+          found: false
+        });
+        telecodeList.push("????");
+        combinedPinyin.push("-");
+        combinedTerjemahan.push("[?] ");
+      }
+    }
+
+    return {
+      inputHanzi: input,
+      combinedTelecode: telecodeList.join("-"),
+      combinedPinyin: combinedPinyin.join("-"),
+      combinedTerjemahan: combinedTerjemahan.join("-"),
+      details: details
+    };
+
+  } catch (e) {
+    return { error: "Terjadi Kesalahan / 发生错误: " + e.message };
+  }
+}
