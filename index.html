@@ -713,6 +713,9 @@
 </div>
 
 <script>
+  // TEMPELKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI SINI (yang berakhiran /exec)
+  const WEB_APP_URL = "MASUKKAN_URL_WEB_APP_ANDA_DISINI/exec";
+
   function setInput(text) {
     document.getElementById('hanziInput').value = text;
   }
@@ -730,7 +733,7 @@
     document.getElementById('alertModal').style.display = 'none';
   }
 
-  function generateCode() {
+  async function generateCode() {
     var rawInput = document.getElementById('hanziInput').value;
     var trimmedInput = rawInput.trim();
 
@@ -748,19 +751,26 @@
     document.getElementById('loading').style.display = 'block';
     document.getElementById('resultSection').style.display = 'none';
 
-    google.script.run
-      .withSuccessHandler(renderResults)
-      .withFailureHandler(handleError)
-      .processHanziInput(trimmedInput);
+    try {
+      // Mengambil data dari Google Apps Script Web App secara online
+      const response = await fetch(`${WEB_APP_URL}?q=${encodeURIComponent(trimmedInput)}`);
+      const data = await response.json();
+
+      if (data.error) {
+        document.getElementById('loading').style.display = 'none';
+        alert(data.error);
+        return;
+      }
+
+      renderResults(data);
+    } catch (err) {
+      document.getElementById('loading').style.display = 'none';
+      alert('Terjadi kesalahan koneksi / 发生错误: ' + err.message);
+    }
   }
 
   function renderResults(data) {
     document.getElementById('loading').style.display = 'none';
-    
-    if (data.error) {
-      alert(data.error);
-      return;
-    }
 
     document.getElementById('resHanzi').innerText = data.inputHanzi || document.getElementById('hanziInput').value;
     document.getElementById('resPinyin').innerText = data.combinedPinyin ? '(' + data.combinedPinyin + ')' : '-';
@@ -773,7 +783,8 @@
     data.details.forEach(function(item) {
       var tr = document.createElement('tr');
       
-      var tdChar = document.createElement('td');
+      var tdChar = document.getElementById ? document.createElement('td') : null; // simplified creation
+      tdChar = document.createElement('td');
       tdChar.className = 'td-hanzi';
       tdChar.innerText = item.char;
       
@@ -801,12 +812,6 @@
 
     document.getElementById('resultSection').style.display = 'block';
   }
-
-  function handleError(err) {
-    document.getElementById('loading').style.display = 'none';
-    alert('Terjadi kesalahan / 发生错误: ' + err.message);
-  }
 </script>
-
 </body>
 </html>
